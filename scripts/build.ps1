@@ -1,6 +1,9 @@
 #Requires -Version 5.1
 [CmdletBinding()]
-param()
+param(
+    [ValidatePattern('^CodexUsage(?:-[A-Za-z0-9]+)*\.exe$')]
+    [string]$OutputName = 'CodexUsage.exe'
+)
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $sourceRoot = Join-Path $repositoryRoot 'src'
@@ -27,7 +30,8 @@ foreach ($requiredInput in @($icon, $manifest, $license, $notices)) {
 $sources = @(Get-ChildItem -LiteralPath $sourceRoot -Filter '*.cs' -File | Sort-Object Name | ForEach-Object FullName)
 if ($sources.Count -eq 0) { throw 'No C# sources were found in src/.' }
 New-Item -ItemType Directory -Path $buildRoot -Force | Out-Null
-$executable = Join-Path $buildRoot 'CodexUsage.exe'
+$executable = Join-Path $buildRoot $OutputName
+$checksumFile = if ($OutputName -eq 'CodexUsage.exe') { 'SHA256SUMS.txt' } else { [IO.Path]::GetFileNameWithoutExtension($OutputName) + '.SHA256SUMS.txt' }
 $previousTemp = $env:TEMP
 $previousTmp = $env:TMP
 try {
@@ -36,7 +40,7 @@ try {
     & $compiler /nologo /codepage:65001 /langversion:5 /warnaserror+ /target:winexe /platform:x64 /optimize+ /debug- /main:CodexQuotaLite.Program "/out:$executable" "/win32manifest:$manifest" "/win32icon:$icon" "/resource:$license,CodexUsage.LICENSE.txt" "/resource:$notices,CodexUsage.THIRD_PARTY_NOTICES.txt" /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll @sources
     if ($LASTEXITCODE -ne 0) { throw ('Build failed with compiler exit code ' + $LASTEXITCODE) }
     $checksum = (Get-FileHash -LiteralPath $executable -Algorithm SHA256).Hash
-    [IO.File]::WriteAllText((Join-Path $buildRoot 'SHA256SUMS.txt'), ($checksum + '  CodexUsage.exe' + [Environment]::NewLine), [Text.Encoding]::ASCII)
+    [IO.File]::WriteAllText((Join-Path $buildRoot $checksumFile), ($checksum + '  ' + $OutputName + [Environment]::NewLine), [Text.Encoding]::ASCII)
     Get-Item -LiteralPath $executable | Select-Object FullName, Length
 } finally {
     $env:TEMP = $previousTemp

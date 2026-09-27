@@ -25,6 +25,7 @@ namespace CodexQuotaLite
         private UiChoiceList list;
         internal readonly ChoiceItems Items;
         internal int ItemHeight = 22;
+        internal bool GlassSurface;
         internal event EventHandler SelectedIndexChanged;
         internal int SelectedIndex
         {
@@ -56,13 +57,24 @@ namespace CodexQuotaLite
             CloseDropDown(); Invalidate();
         }
 
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            DetailsForm form = FindForm() as DetailsForm;
+            if (!GlassSurface || form == null || !form.PaintGlass(e.Graphics, this)) base.OnPaintBackground(e);
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
             Graphics g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias;
             float radius = Math.Max(4, Height * .23f);
-            Theme.Rounded(g, new RectangleF(.5f, .5f, Width - 1, Height - 1), radius, Theme.Card,
-                Focused || IsDroppedDown ? Theme.Aqua : hovering ? Theme.Muted : Theme.Border);
+            DetailsForm form = FindForm() as DetailsForm;
+            bool glass = GlassSurface && form != null && form.HasGlassBackground;
+            Color surface = glass ? (Theme.IsDark ? Color.FromArgb(85, 32, 42, 56) : Color.FromArgb(68, 255, 255, 255)) : Theme.Card;
+            RectangleF bounds = new RectangleF(.5f, .5f, Width - 1, Height - 1);
+            Theme.Rounded(g, bounds, radius, surface,
+                glass ? (Color?)null : Focused || IsDroppedDown ? Theme.Aqua : hovering ? Theme.Muted : Theme.Border);
+            if (glass) using (GraphicsPath path = Theme.Round(bounds, radius)) DetailsForm.DrawGlassRim(g, path, Height, Focused || IsDroppedDown);
             int pad = Math.Max(7, Height / 4);
             Rectangle text = new Rectangle(pad, 0, Math.Max(1, Width - pad - Height), Height);
             string value = SelectedIndex < 0 ? UiText.T("暂无额度", "No windows") : Convert.ToString(Items[SelectedIndex]);

@@ -17,7 +17,7 @@ namespace CodexQuotaLite
         private readonly WidgetForm widget;
         private readonly DetailsForm details;
         private readonly NotifyIcon tray;
-        private readonly Icon trayIcon;
+        private Icon trayIcon;
         private readonly ContextMenuStrip menu;
         private readonly ToolStripMenuItem visibilityItem;
         private readonly ToolStripMenuItem refreshItem;
@@ -52,6 +52,7 @@ namespace CodexQuotaLite
             settings = appSettings ?? new AppSettings();
             settings.ScalePercent = 100;
             UiText.Language = settings.Language;
+            Theme.Apply(ResolveDarkTheme());
             widget = new WidgetForm();
             details = new DetailsForm(settings);
             resetFeed = new ResetFeed(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexUsage", "reset-announcement.json"));
@@ -102,7 +103,7 @@ namespace CodexQuotaLite
                 Point pointer = Cursor.Position;
                 widget.TrackHintPointer(pointer);
                 bool inside = (widget.Visible && widget.Bounds.Contains(pointer)) || details.ContainsPointer(pointer);
-                if (hoverDismiss.ShouldDismiss(DateTimeOffset.UtcNow, details.Visible, inside, menu.Visible)) details.Hide();
+                if (!details.EditingLocation && hoverDismiss.ShouldDismiss(DateTimeOffset.UtcNow, details.Visible, inside, menu.Visible)) details.Hide();
             };
             refreshTimer.Start();
             clockTimer.Start();
@@ -191,7 +192,9 @@ namespace CodexQuotaLite
         {
             settings.ScalePercent = 100;
             settings.Language = details.SelectedLanguage;
+            settings.ThemeMode = details.SelectedThemeMode;
             UiText.Language = settings.Language;
+            UpdateTheme();
             if (details.SelectedWindowId != null) settings.SelectedWindowId = details.SelectedWindowId;
             widget.TopMost = true;
             details.TopMost = false;
@@ -240,6 +243,7 @@ namespace CodexQuotaLite
         private async Task ClockTickAsync()
         {
             if (stopping) return;
+            UpdateTheme();
             Render();
             if (busy || snapshot == null || snapshot.Windows == null) return;
             DateTimeOffset now = DateTimeOffset.UtcNow;
@@ -257,6 +261,28 @@ namespace CodexQuotaLite
             // One request covers all windows; a repeated expired response waits for
             // the normal five-minute retry or an explicit user refresh.
             if (refreshNeeded) await RefreshAsync();
+        }
+
+        private bool ResolveDarkTheme()
+        {
+            if (settings.ThemeMode == "dark") return true;
+            return settings.ThemeMode == "auto" && settings.Latitude.HasValue && settings.Longitude.HasValue &&
+                SolarTheme.IsDark(DateTime.Now, settings.Latitude.Value, settings.Longitude.Value);
+        }
+
+        private void UpdateTheme()
+        {
+            bool dark = ResolveDarkTheme();
+            if (Theme.IsDark == dark) return;
+            Theme.Apply(dark);
+            widget.BackColor = Theme.Background;
+            details.ApplyTheme();
+            menu.BackColor = Theme.Card; menu.ForeColor = Theme.Text;
+            Icon previous = trayIcon;
+            trayIcon = Theme.CreateIcon();
+            tray.Icon = trayIcon;
+            if (previous != null) previous.Dispose();
+            Render();
         }
 
         private void Render()

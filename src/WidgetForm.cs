@@ -26,7 +26,7 @@ namespace CodexQuotaLite
             ShowInTaskbar = false;
             StartPosition = FormStartPosition.Manual;
             AutoScaleMode = AutoScaleMode.None;
-            BackColor = WidgetRenderer.Surface;
+            BackColor = Theme.Background;
             DoubleBuffered = true;
             KeyPreview = true;
             Cursor = Cursors.Hand;

@@ -8,14 +8,30 @@ namespace CodexQuotaLite
 {
     internal static class Theme
     {
-        internal static readonly Color Background = Color.FromArgb(16, 23, 36);
-        internal static readonly Color Card = Color.FromArgb(25, 35, 51);
-        internal static readonly Color Border = Color.FromArgb(48, 63, 82);
-        internal static readonly Color Text = Color.FromArgb(238, 245, 250);
-        internal static readonly Color Muted = Color.FromArgb(150, 169, 188);
-        internal static readonly Color Aqua = Color.FromArgb(70, 224, 196);
-        internal static readonly Color Blue = Color.FromArgb(106, 163, 255);
-        internal static readonly Color Warning = Color.FromArgb(245, 193, 117);
+        internal static Color Background { get; private set; }
+        internal static Color Card { get; private set; }
+        internal static Color Border { get; private set; }
+        internal static Color Text { get; private set; }
+        internal static Color Muted { get; private set; }
+        internal static Color Aqua { get; private set; }
+        internal static Color Blue { get; private set; }
+        internal static Color Warning { get; private set; }
+        internal static bool IsDark { get; private set; }
+
+        static Theme() { Apply(false); }
+
+        internal static void Apply(bool dark)
+        {
+            IsDark = dark;
+            Background = dark ? Color.FromArgb(20, 27, 38) : Color.FromArgb(246, 248, 251);
+            Card = dark ? Color.FromArgb(32, 42, 56) : Color.White;
+            Border = dark ? Color.FromArgb(75, 91, 109) : Color.FromArgb(214, 222, 232);
+            Text = dark ? Color.FromArgb(238, 245, 251) : Color.FromArgb(24, 33, 47);
+            Muted = dark ? Color.FromArgb(174, 191, 211) : Color.FromArgb(100, 116, 139);
+            Aqua = dark ? Color.FromArgb(64, 218, 195) : Color.FromArgb(13, 148, 136);
+            Blue = dark ? Color.FromArgb(117, 168, 255) : Color.FromArgb(37, 99, 235);
+            Warning = dark ? Color.FromArgb(255, 185, 101) : Color.FromArgb(180, 83, 9);
+        }
 
         internal static GraphicsPath Round(RectangleF bounds, float radius)
         {

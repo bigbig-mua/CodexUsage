@@ -16,6 +16,9 @@ namespace CodexQuotaLite
         public int? Y { get; set; }
         public bool DockToTaskbar { get; set; }
         public int? TaskbarX { get; set; }
+        public string ThemeMode { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
 
         public AppSettings()
         {
@@ -23,6 +26,7 @@ namespace CodexQuotaLite
             ScalePercent = 100;
             Language = "zh";
             DockToTaskbar = true;
+            ThemeMode = "light";
         }
     }
 
@@ -175,6 +179,16 @@ namespace CodexQuotaLite
             sanitized.Y = source.Y;
             sanitized.DockToTaskbar = source.DockToTaskbar;
             sanitized.TaskbarX = source.TaskbarX;
+            sanitized.ThemeMode = source.ThemeMode == "dark" || source.ThemeMode == "auto" ? source.ThemeMode : "light";
+            if (source.Latitude.HasValue && source.Longitude.HasValue &&
+                !Double.IsNaN(source.Latitude.Value) && !Double.IsInfinity(source.Latitude.Value) &&
+                !Double.IsNaN(source.Longitude.Value) && !Double.IsInfinity(source.Longitude.Value) &&
+                source.Latitude.Value >= -90 && source.Latitude.Value <= 90 &&
+                source.Longitude.Value >= -180 && source.Longitude.Value <= 180)
+            {
+                sanitized.Latitude = source.Latitude;
+                sanitized.Longitude = source.Longitude;
+            }
             return sanitized;
         }
     }
