@@ -172,6 +172,14 @@ namespace CodexQuotaLite
             return snapshot.Windows[0];
         }
 
+        private QuotaWindow FindWindow(int minutes)
+        {
+            if (snapshot == null || snapshot.Windows == null) return null;
+            foreach (QuotaWindow candidate in snapshot.Windows)
+                if (candidate.WindowMinutes.HasValue && candidate.WindowMinutes.Value == minutes) return candidate;
+            return null;
+        }
+
         private void ShowDetails()
         {
             if (stopping) return;
@@ -293,9 +301,11 @@ namespace CodexQuotaLite
             menu.Items[2].Text = UiText.T("立即刷新", "Refresh");
             menu.Items[4].Text = UiText.T("退出", "Exit");
             QuotaWindow selected = SelectedWindow();
+            QuotaWindow fiveHour = FindWindow(300) ?? selected;
+            QuotaWindow weekly = FindWindow(10080);
             bool stale = snapshot != null && (!String.IsNullOrEmpty(error) || DateTimeOffset.UtcNow - snapshot.FetchedAtUtc > TimeSpan.FromMinutes(10));
             string combined = !String.IsNullOrEmpty(settingsError) ? settingsError : error;
-            widget.SetState(selected, snapshot == null ? "Codex" : snapshot.PlanLabel, stale, busy, combined);
+            widget.SetState(selected, fiveHour, weekly, snapshot == null ? "Codex" : snapshot.PlanLabel, stale, busy, combined);
             details.SetState(snapshot, selected == null ? null : selected.Id, stale, busy, error, settingsError);
             refreshItem.Enabled = !busy;
             string tooltip = UiText.AppName + (snapshot == null ? "" : " · " + UiText.Plan(snapshot.PlanLabel)) + (selected == null ? "" : " · " + UiText.WindowLabel(selected.Label) + " " + (selected.IsResetPending(DateTimeOffset.UtcNow) ? UiText.T("待更新", "Pending") : Theme.Percent(selected.RemainingPercent)));

@@ -8,6 +8,8 @@ namespace CodexQuotaLite
     {
         private float scale = 1;
         private QuotaWindow window;
+        private QuotaWindow fiveHourWindow;
+        private QuotaWindow weeklyWindow;
         private string plan = "Codex";
         private bool stale;
         private bool busy;
@@ -63,9 +65,11 @@ namespace CodexQuotaLite
             Present();
         }
 
-        public void SetState(QuotaWindow selected, string planLabel, bool expired, bool refreshing, string message)
+        public void SetState(QuotaWindow selected, QuotaWindow fiveHour, QuotaWindow weekly, string planLabel, bool expired, bool refreshing, string message)
         {
             window = selected;
+            fiveHourWindow = fiveHour;
+            weeklyWindow = weekly;
             Text = UiText.AppName;
             AccessibleName = UiText.T("CodexUsage，单击查看详情", "CodexUsage, click for details");
             plan = String.IsNullOrWhiteSpace(planLabel) ? "Codex" : planLabel;
@@ -81,7 +85,7 @@ namespace CodexQuotaLite
         }
 
         internal Bitmap RenderImage()
-        { return WidgetRenderer.Render(ClientSize, window, stale, busy, error, DateTimeOffset.UtcNow); }
+        { return WidgetRenderer.Render(ClientSize, window, fiveHourWindow, weeklyWindow, stale, busy, error, DateTimeOffset.UtcNow); }
         private void Present()
         {
             if (!IsHandleCreated || !Visible || IsDisposed || ClientSize.Width < 1 || ClientSize.Height < 1) return;

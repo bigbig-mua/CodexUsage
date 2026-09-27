@@ -29,7 +29,7 @@ namespace CodexQuotaLite
                 (minutes % 60).ToString("00", CultureInfo.InvariantCulture) + "m";
         }
 
-        internal static Bitmap Render(Size size, QuotaWindow window, bool stale, bool busy, string error, DateTimeOffset now)
+        internal static Bitmap Render(Size size, QuotaWindow timeWindow, QuotaWindow fiveHourWindow, QuotaWindow weeklyWindow, bool stale, bool busy, string error, DateTimeOffset now)
         {
             const int samples = 4;
             using (var large = new Bitmap(size.Width * samples, size.Height * samples, PixelFormat.Format32bppPArgb))
@@ -42,19 +42,27 @@ namespace CodexQuotaLite
                 float scale = size.Height / (float)LogicalHeight * samples;
                 g.ScaleTransform(scale, scale);
                 float width = size.Width * samples / scale;
-                bool pending = window != null && window.IsResetPending(now);
-                Color quotaColor = stale || pending ? MutedColor : QuotaColor;
-                DrawDisk(g, new RectangleF(7, 3, 14, 14), pending || window == null ? null : window.RemainingPercent, quotaColor);
-                DrawDisk(g, new RectangleF(7, 23, 14, 14), window == null ? null : window.GetTimeRemainingPercent(now), stale ? MutedColor : TimeColor);
-                string amount = pending ? UiText.T("待更新", "Wait") : window == null ? "—" : Theme.Percent(window.RemainingPercent);
+                bool quotaPending = fiveHourWindow != null && fiveHourWindow.IsResetPending(now);
+                Color quotaColor = stale || quotaPending ? MutedColor : QuotaColor;
+                DrawDisk(g, new RectangleF(7, 3, 14, 14), quotaPending || fiveHourWindow == null ? null : fiveHourWindow.RemainingPercent, quotaColor);
+                DrawDisk(g, new RectangleF(7, 23, 14, 14), timeWindow == null ? null : timeWindow.GetTimeRemainingPercent(now), stale ? MutedColor : TimeColor);
+                string amount = FormatQuotaPair(fiveHourWindow, weeklyWindow, now);
                 RectangleF topText = new RectangleF(24, 2, width - 27, 16);
                 RectangleF bottomText = new RectangleF(24, 22, width - 27, 16);
                 DrawText(g, amount, topText, ValueFontSize, FontStyle.Bold, quotaColor);
-                string time = busy && window == null ? UiText.T("更新中", "Sync") : !String.IsNullOrEmpty(error) ? UiText.T("失败", "Retry") : stale ? UiText.T("已过期", "Stale") : CompactTime(window, now);
+                string time = busy && timeWindow == null ? UiText.T("更新中", "Sync") : !String.IsNullOrEmpty(error) ? UiText.T("失败", "Retry") : stale ? UiText.T("已过期", "Stale") : CompactTime(timeWindow, now);
                 DrawText(g, time, bottomText, ValueFontSize, FontStyle.Bold, stale || !String.IsNullOrEmpty(error) ? WarningColor : TimeColor);
                 g.ResetTransform();
                 return Reduce(large, size);
             }
+        }
+
+        private static string FormatQuotaPair(QuotaWindow fiveHourWindow, QuotaWindow weeklyWindow, DateTimeOffset now)
+        {
+            if (fiveHourWindow != null && fiveHourWindow.IsResetPending(now)) return UiText.T("待更新", "Wait");
+            if (fiveHourWindow == null && weeklyWindow == null) return "—";
+            return Theme.Percent(fiveHourWindow == null ? (double?)null : fiveHourWindow.RemainingPercent) + " / " +
+                Theme.Percent(weeklyWindow == null ? (double?)null : weeklyWindow.RemainingPercent);
         }
 
         internal static Bitmap RenderGlyph(int size)
