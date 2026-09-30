@@ -45,7 +45,7 @@ namespace CodexQuotaLite
         }
 
         protected override CreateParams CreateParams
-        { get { var value = base.CreateParams; value.ExStyle |= 0x00080000 | 0x00000080; return value; } }
+        { get { var value = base.CreateParams; value.ExStyle |= 0x00080000 | 0x00000080 | 0x08000000; return value; } }
         protected override bool ShowWithoutActivation { get { return true; } }
 
         public void ApplyScale(int percent)
@@ -74,14 +74,26 @@ namespace CodexQuotaLite
             AccessibleName = UiText.T("CodexUsage，单击查看详情", "CodexUsage, click for details");
             plan = String.IsNullOrWhiteSpace(planLabel) ? "Codex" : planLabel;
             stale = expired; busy = refreshing; error = message;
-            bool pending = window != null && window.IsResetPending(DateTimeOffset.UtcNow);
-            string status = UiText.Plan(plan) + ". " + (window == null ? UiText.T("尚无额度数据", "No usage data") : pending ? UiText.WindowLabel(window.Label) + UiText.T("，已到重置时间，待更新", ", reset reached; awaiting update") : UiText.WindowLabel(window.Label) + UiText.T("，剩余额度 ", ", remaining ") + Theme.Percent(window.RemainingPercent) + ", " + Theme.ResetText(window, DateTimeOffset.UtcNow)) + ". ";
+            DateTimeOffset now = DateTimeOffset.UtcNow;
+            string status = UiText.Plan(plan) + ". " + (window == null ? UiText.T("尚无额度数据", "No usage data") : WindowStatus(window, now)) + ". ";
+            if (window != null && (weeklyWindow == null || weeklyWindow.Id != window.Id))
+                status += "\n" + (weeklyWindow == null
+                    ? UiText.T("每周额度，暂无数据", "Weekly, no usage data")
+                    : WindowStatus(weeklyWindow, now)) + ". ";
             if (stale) status += UiText.T("上次结果已过期。", "The previous result is out of date. ");
             if (!String.IsNullOrEmpty(error)) status += UiText.Error(error);
             hintText = status + UiText.T("\n单击查看详情 · 右键打开菜单", "\nClick for details · Right-click for menu");
             if (tip.Active && !hintSuppressed) tip.SetToolTip(this, hintText);
             AccessibleDescription = status;
             Present();
+        }
+
+        private static string WindowStatus(QuotaWindow value, DateTimeOffset now)
+        {
+            string label = UiText.WindowLabel(value.Label);
+            if (value.IsResetPending(now))
+                return label + UiText.T("，已到重置时间，待更新", ", reset reached; awaiting update");
+            return label + UiText.T("，剩余额度 ", ", remaining ") + Theme.Percent(value.RemainingPercent) + ", " + Theme.ResetText(value, now);
         }
 
         internal Bitmap RenderImage()

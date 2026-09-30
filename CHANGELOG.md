@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- 修复视频、图像等应用保留最大化标记时漏判全屏的问题；同一窗口切换全屏时立即检查，并按组件所在显示器判断遮挡。
+  Detect fullscreen media windows that retain the maximized flag, react to fullscreen size changes, and check coverage on the widget's monitor.
+- 启动、托盘显示和详情操作统一遵守任务栏与全屏可见性，任务栏不可用时隐藏组件。
+  Apply taskbar and fullscreen visibility rules at startup and during tray and detail actions; hide the widget when the taskbar is unavailable.
+- 额度条窗口显式禁止激活，避免系统启动参数导致它抢走全屏应用的焦点。
+  Mark the widget as non-activating so startup window flags cannot steal focus from fullscreen applications.
+
 ## 1.0.3 — 2026-09-15
 
 - 移除全部 Spark 额度，旧选择自动回到可用额度。

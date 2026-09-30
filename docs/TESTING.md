@@ -1,5 +1,19 @@
 # 测试 / Testing
 
+## 开发分支：任务栏与全屏 / Development: taskbar and fullscreen
+
+2026-09-30：修复版通过 C# 5、x64、警告视为错误的构建；Domain 34 项、Bridge 8 项、Taskbar 12 项检查通过，0 失败。Taskbar 包括全屏保留最大化标记、普通最大化、自动隐藏任务栏的标题栏与边缘间隙、不同显示器及负坐标、跨屏、退出全屏和隐藏窗口。4 项原生窗口检查在虚拟桌面区域之外创建不抢焦点的测试窗口，验证真实 Win32 客户区与最大化标记。
+
+On 2026-09-30, the fix built for x64 with C# 5 and warnings treated as errors. Domain passed 34 checks, Bridge 8, and Taskbar 12, with no failures. Taskbar covers retained maximized flags, ordinary maximization, auto-hide title bars and edge gaps, other monitors, negative coordinates, spanning windows, fullscreen exit, and hidden windows. Four native checks use windows outside the virtual desktop without activation to verify actual Win32 client rectangles and maximized flags.
+
+本地修复版还通过 TaskbarLive 的 5 项运行检查：启动显示、带最大化标记的全屏隐藏、退出全屏恢复、无最大化标记的全屏隐藏及关闭全屏窗口后恢复。测试使用完全透明、不响应鼠标且不抢焦点的原生窗口。通过 Windows 桌面启动修复版时，前台窗口句柄在启动前后保持一致；核验工具退出后程序仍在运行。
+
+The local build also passed five TaskbarLive checks: visible startup, hiding for fullscreen with a maximized flag, restoration after fullscreen exit, hiding for fullscreen without that flag, and restoration after the fullscreen window closes. The native test window is fully transparent, passes mouse input through, and never activates. Launching the final build through the Windows desktop launcher preserved the foreground window handle, and the widget remained running after the verification tool exited.
+
+尚未用用户实际的视频、图像应用独立验证全屏切换和窗口事件时序；几何与原生窗口检查不等于这些应用的端到端验收。
+
+Fullscreen transitions and event timing in the user's actual video and image applications have not been independently verified. Geometry and native-window checks do not constitute end-to-end testing of those applications.
+
 ## 1.0.3
 
 新增检查覆盖 Spark 过滤、公共重置记录与预告区分、未知类型、安全来源链接、中英文缓存文案、损坏缓存及取消。用户已认可本地公告布局；GUI、真实Plus、其他DPI和新增HTTP异常分支尚未全面独立验证。
@@ -9,6 +23,10 @@ New checks cover Spark filtering, executed versus scheduled reset records, unkno
 测试使用合成数据和模拟子进程，无需登录 Codex。
 
 Tests use synthetic data and a fake server; no Codex sign-in is required.
+
+可选 TaskbarLive 需要已经运行且当前可见的组件；它不包含在 `All` 中。
+
+Optional TaskbarLive checks require a running, currently visible widget and are excluded from `All`.
 
 ## 命令 / Commands
 
@@ -20,15 +38,19 @@ Tests use synthetic data and a fake server; no Codex sign-in is required.
 
 ./scripts/test.ps1 -Suite Domain
 ./scripts/test.ps1 -Suite Bridge
+./scripts/test.ps1 -Suite Taskbar
 ./scripts/test.ps1 -Suite All
+
+# 可选：核验正在运行的组件 / Optional: verify the running widget
+./scripts/test.ps1 -Suite TaskbarLive
 
 # 只编译 / Compile only
 ./scripts/test.ps1 -Suite All -BuildOnly
 ```
 
-`All` 包含 Domain 和 Bridge。`-BuildOnly` 编译所选套件，不执行测试。
+`All` 包含 Domain、Bridge 和 Taskbar。`-BuildOnly` 编译所选套件，不执行测试。
 
-`All` runs Domain and Bridge. `-BuildOnly` compiles the selected suites without running them.
+`All` runs Domain, Bridge, and Taskbar. `-BuildOnly` compiles the selected suites without running them.
 
 ## 覆盖范围 / Coverage
 
@@ -36,8 +58,10 @@ Tests use synthetic data and a fake server; no Codex sign-in is required.
 | --- | --- |
 | Domain | 额度与套餐解析、百分比与重置计算、异常值、安全错误、设置保存与恢复、固定尺寸、语言及运行数据路径 |
 | Bridge | 模拟服务握手、通知与响应、安全错误、超时、取消、异常退出及子进程清理 |
+| Taskbar | 全屏与普通最大化区分、任务栏所在显示器、自动隐藏边缘、退出全屏及离屏原生窗口检查 |
+| TaskbarLive | 可选：正在运行的组件在透明原生全屏窗口出现、缩小和关闭时隐藏与恢复 |
 
-Domain covers parsing, calculations, settings, and runtime data paths. Bridge launches a fake server to exercise protocol and process handling.
+Domain covers parsing, calculations, settings, and runtime data paths. Bridge launches a fake server to exercise protocol and process handling. Taskbar checks fullscreen geometry and offscreen native windows without activating them.
 
 ## 结果 / Results
 

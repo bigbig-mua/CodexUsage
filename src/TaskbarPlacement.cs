@@ -9,14 +9,20 @@ namespace CodexQuotaLite
     internal static class TaskbarPlacement
     {
         [StructLayout(LayoutKind.Sequential)] private struct NativeRect { public int Left, Top, Right, Bottom; public Rectangle Rectangle { get { return Rectangle.FromLTRB(Left, Top, Right, Bottom); } } }
+        [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X, Y; }
         [StructLayout(LayoutKind.Sequential)] private struct AppBarData { public uint Size; public IntPtr Window; public uint Callback; public uint Edge; public NativeRect Rect; public IntPtr Parameter; }
         [DllImport("shell32.dll")] private static extern UIntPtr SHAppBarMessage(uint message, ref AppBarData data);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr FindWindow(string className, string title);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string className, string title);
         private delegate bool EnumChildCallback(IntPtr window, IntPtr parameter);
         [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr parent, EnumChildCallback callback, IntPtr parameter);
+        [DllImport("user32.dll")] private static extern bool EnumWindows(EnumChildCallback callback, IntPtr parameter);
         [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr window, out NativeRect rect);
+        [DllImport("user32.dll")] private static extern bool GetClientRect(IntPtr window, out NativeRect rect);
+        [DllImport("user32.dll")] private static extern bool ClientToScreen(IntPtr window, ref NativePoint point);
         [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr window);
+        [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr window);
+        [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr window, int attribute, out int value, int size);
         [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")] private static extern bool IsZoomed(IntPtr window);
         [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr window, IntPtr after, int x, int y, int width, int height, uint flags);
@@ -69,25 +75,58 @@ namespace CodexQuotaLite
             return Theme.Clamp(new Rectangle(x, y, width, height), Rectangle.Inflate(taskbar, -margin, -margin));
         }
 
-        internal static bool ForegroundIsFullscreen(IntPtr widget, IntPtr details)
+        internal static bool FullscreenHidesTaskbar(IntPtr widget, IntPtr details, Rectangle taskbarBounds)
         {
+            Rectangle screen = Screen.FromRectangle(taskbarBounds).Bounds;
             IntPtr foreground = GetForegroundWindow();
-            if (foreground == IntPtr.Zero || foreground == widget || foreground == details) return false;
-            StringBuilder className = new StringBuilder(64);
-            GetClassName(foreground, className, className.Capacity);
-            string kind = className.ToString();
-            if (kind == "Shell_TrayWnd" || kind == "Progman" || kind == "WorkerW") return false;
-            NativeRect native;
-            if (!GetWindowRect(foreground, out native)) return false;
-            Rectangle screen = Screen.FromRectangle(native.Rectangle).Bounds;
-            return CoversScreen(native.Rectangle, screen, IsZoomed(foreground));
+            if (foreground != widget && foreground != details && WindowIsFullscreen(foreground, screen)) return true;
+            // A fullscreen window can still cover this taskbar when focus moves
+            // to a popup or another monitor. Only inspect windows above the bar.
+            IntPtr taskbar = FindWindow("Shell_TrayWnd", null);
+            if (taskbar == IntPtr.Zero) return false;
+            bool covered = false;
+            EnumWindows(delegate(IntPtr window, IntPtr ignored) {
+                if (window == taskbar) return false;
+                if (window == widget || window == details || !WindowIsFullscreen(window, screen)) return true;
+                covered = true;
+                return false;
+            }, IntPtr.Zero);
+            return covered;
         }
 
-        internal static bool CoversScreen(Rectangle window, Rectangle screen, bool maximized)
+        internal static bool WindowIsFullscreen(IntPtr window, Rectangle screen)
         {
-            // With an auto-hide taskbar a normal maximized window can cover the
-            // entire display. It must still permit the strip when the bar is revealed.
-            return !maximized && window.Left <= screen.Left && window.Top <= screen.Top && window.Right >= screen.Right && window.Bottom >= screen.Bottom;
+            if (window == IntPtr.Zero || !IsWindowVisible(window) || IsIconic(window)) return false;
+            NativeRect native;
+            if (!GetWindowRect(window, out native) || !ContainsScreen(native.Rectangle, screen)) return false;
+            StringBuilder className = new StringBuilder(64);
+            GetClassName(window, className, className.Capacity);
+            string kind = className.ToString();
+            if (kind == "Shell_TrayWnd" || kind == "Shell_SecondaryTrayWnd" || kind == "Progman" || kind == "WorkerW") return false;
+            int cloaked;
+            // Ignore windows on other virtual desktops (DWMWA_CLOAKED).
+            if (DwmGetWindowAttribute(window, 14, out cloaked, sizeof(int)) >= 0 && cloaked != 0) return false;
+            Rectangle client = Rectangle.Empty;
+            NativeRect clientRect;
+            NativePoint origin = new NativePoint();
+            if (GetClientRect(window, out clientRect) && ClientToScreen(window, ref origin))
+                client = new Rectangle(origin.X, origin.Y, clientRect.Right - clientRect.Left, clientRect.Bottom - clientRect.Top);
+            return CoversScreen(native.Rectangle, client, screen, IsZoomed(window));
+        }
+
+        internal static bool CoversScreen(Rectangle window, Rectangle client, Rectangle screen, bool maximized)
+        {
+            // Media apps can retain WS_MAXIMIZE while removing their frame for
+            // fullscreen. Check the client area instead of excluding all maximized
+            // windows; a regular maximized window still has a title bar or edge gap.
+            return ContainsScreen(window, screen) && (!maximized || ContainsScreen(client, screen));
+        }
+
+        private static bool ContainsScreen(Rectangle window, Rectangle screen)
+        {
+            return window.Width > 0 && window.Height > 0 && screen.Width > 0 && screen.Height > 0
+                && window.Left <= screen.Left && window.Top <= screen.Top
+                && window.Right >= screen.Right && window.Bottom >= screen.Bottom;
         }
 
         internal static void KeepAboveTaskbar(IntPtr window)
@@ -109,31 +148,40 @@ namespace CodexQuotaLite
             WinEventCallback callback, uint process, uint thread, uint flags);
         [DllImport("user32.dll")]
         private static extern bool UnhookWinEvent(IntPtr hook);
-        private IntPtr hook;
+        [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr FindWindow(string className, string title);
+        private IntPtr foregroundHook;
+        private IntPtr locationHook;
         private GCHandle callbackRoot;
         private bool disposed;
 
         internal ForegroundMonitor(Action changed)
         {
-            WinEventCallback callback = delegate {
-                if (!disposed) changed();
+            WinEventCallback callback = delegate(IntPtr hook, uint eventType, IntPtr window,
+                int objectId, int childId, uint threadId, uint time) {
+                if (disposed) return;
+                if (eventType == 3 || (objectId == 0 && childId == 0
+                    && (window == GetForegroundWindow() || window == FindWindow("Shell_TrayWnd", null)))) changed();
             };
             callbackRoot = GCHandle.Alloc(callback);
             // EVENT_SYSTEM_FOREGROUND, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS.
-            hook = SetWinEventHook(3, 3, IntPtr.Zero, callback, 0, 0, 2);
+            foregroundHook = SetWinEventHook(3, 3, IntPtr.Zero, callback, 0, 0, 2);
+            // EVENT_OBJECT_LOCATIONCHANGE also fires when the same foreground
+            // window enters or leaves fullscreen without changing focus.
+            locationHook = SetWinEventHook(0x800B, 0x800B, IntPtr.Zero, callback, 0, 0, 2);
             // If hooks are unavailable, the existing timer remains a fallback.
-            if (hook == IntPtr.Zero) callbackRoot.Free();
+            if (foregroundHook == IntPtr.Zero && locationHook == IntPtr.Zero) callbackRoot.Free();
         }
 
         public void Dispose()
         {
             if (disposed) return;
             disposed = true;
-            if (hook != IntPtr.Zero)
-            {
-                if (UnhookWinEvent(hook) && callbackRoot.IsAllocated) callbackRoot.Free();
-                hook = IntPtr.Zero;
-            }
+            bool foregroundReleased = foregroundHook == IntPtr.Zero || UnhookWinEvent(foregroundHook);
+            bool locationReleased = locationHook == IntPtr.Zero || UnhookWinEvent(locationHook);
+            foregroundHook = IntPtr.Zero;
+            locationHook = IntPtr.Zero;
+            if (foregroundReleased && locationReleased && callbackRoot.IsAllocated) callbackRoot.Free();
         }
     }
 }

@@ -61,11 +61,10 @@ namespace CodexQuotaLite
             widget.ApplyScale(settings.ScalePercent);
             widget.TopMost = true;
             details.TopMost = false;
-            RestorePosition();
+            UpdateTaskbar();
             widget.DetailRequested += delegate { ShowDetails(); };
             details.RefreshRequested += async delegate { await RefreshAsync(); };
             details.SettingsChanged += delegate { ApplySettings(); };
-            widget.Shown += async delegate { await RefreshAsync(); };
             widget.FormClosing += delegate { Stop(); };
             menu = new ContextMenuStrip();
             menu.BackColor = Theme.Card; menu.ForeColor = Theme.Text;
@@ -86,7 +85,7 @@ namespace CodexQuotaLite
             tray.Icon = trayIcon;
             tray.Text = "Codex 额度小窗";
             tray.ContextMenuStrip = menu;
-            tray.DoubleClick += delegate { widgetEnabled = true; RestorePosition(); widget.Show(); ShowDetails(); };
+            tray.DoubleClick += delegate { ShowDetails(); };
             tray.Visible = true;
             refreshTimer = new System.Windows.Forms.Timer();
             refreshTimer.Interval = 5 * 60 * 1000;
@@ -110,10 +109,11 @@ namespace CodexQuotaLite
             taskbarTimer.Start();
             hoverTimer.Start();
             Render();
-            widget.Show();
             initialized = true;
             foregroundMonitor = new ForegroundMonitor(QueueTaskbarUpdate);
             UpdateTaskbar();
+            // Refresh even when startup happens behind a fullscreen application.
+            widget.BeginInvoke((MethodInvoker)async delegate { await RefreshAsync(); });
         }
 
         private void QueueTaskbarUpdate()
@@ -130,21 +130,15 @@ namespace CodexQuotaLite
             catch (InvalidOperationException) { taskbarUpdateQueued = false; }
         }
 
-        private void RestorePosition()
-        {
-            widget.TopMost = true;
-            if (UpdateTaskbar()) return;
-            widget.ApplyScale(settings.ScalePercent);
-            Rectangle area = Screen.PrimaryScreen.WorkingArea;
-            widget.Location = new Point(area.Right - widget.Width - 20, area.Bottom - widget.Height - 20);
-            widget.Bounds = Theme.Clamp(widget.Bounds, area);
-        }
-
         private bool UpdateTaskbar()
         {
             if (stopping) return false;
             Rectangle taskbar, notification; bool visible;
-            if (!TaskbarPlacement.TryRead(out taskbar, out visible, out notification)) return false;
+            if (!TaskbarPlacement.TryRead(out taskbar, out visible, out notification))
+            {
+                widget.Hide(); details.Hide();
+                return false;
+            }
             if (taskbar != currentTaskbar || appliedTaskbarScale != settings.ScalePercent)
             {
                 currentTaskbar = taskbar; appliedTaskbarScale = settings.ScalePercent;
@@ -157,9 +151,10 @@ namespace CodexQuotaLite
                 if (placementObserver != null) placementObserver(taskbar, notification, placement);
             }
             if (!initialized) return true;
-            bool show = widgetEnabled && (taskbarVisibility.Observe(visible) || details.Visible) && !TaskbarPlacement.ForegroundIsFullscreen(widget.Handle, details.IsHandleCreated ? details.Handle : IntPtr.Zero);
+            bool taskbarVisible = taskbarVisibility.Observe(visible);
+            bool show = widgetEnabled && taskbarVisible && !TaskbarPlacement.FullscreenHidesTaskbar(widget.Handle, details.IsHandleCreated ? details.Handle : IntPtr.Zero, taskbar);
             if (show && !widget.Visible) widget.Show();
-            else if (!show && widget.Visible) { widget.Hide(); details.Hide(); }
+            else if (!show) { widget.Hide(); details.Hide(); }
             if (show) TaskbarPlacement.KeepAboveTaskbar(widget.Handle);
             return true;
         }
@@ -184,7 +179,8 @@ namespace CodexQuotaLite
         {
             if (stopping) return;
             widgetEnabled = true;
-            if (!widget.Visible) widget.Show();
+            UpdateTaskbar();
+            if (!widget.Visible) return;
             Render();
             details.ShowAnchored(widget);
         }
@@ -192,8 +188,7 @@ namespace CodexQuotaLite
         private void ToggleWidget()
         {
             widgetEnabled = !widgetEnabled;
-            if (!widgetEnabled) { widget.Hide(); details.Hide(); }
-            else { RestorePosition(); widget.Show(); }
+            UpdateTaskbar();
         }
 
         private void ApplySettings()
@@ -204,7 +199,6 @@ namespace CodexQuotaLite
             UiText.Language = settings.Language;
             UpdateTheme();
             if (details.SelectedWindowId != null) settings.SelectedWindowId = details.SelectedWindowId;
-            widget.TopMost = true;
             details.TopMost = false;
             details.ApplyScale(settings.ScalePercent);
             UpdateTaskbar();

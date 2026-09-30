@@ -13,6 +13,7 @@ For Windows x64.
 ## Features
 
 - The transparent taskbar widget uses a cyan disk and percentage for remaining quota, plus a blue disk and an hours-and-minutes countdown for time left in the same window. Both rows are right aligned and use the same high-contrast colors in light and dark themes.
+- In the current development branch, the widget only appears on the taskbar. It hides when fullscreen video, image, or other applications cover that taskbar, and returns after fullscreen ends.
 - The details window uses a translucent glass background with light, dark, and automatic sunrise/sunset themes.
 - Automatic mode calculates local sunrise and sunset offline from coordinates entered manually, without network access or system location services.
 - Shows returned quota windows with the same rules for Plus and Pro; Spark quotas are excluded.
